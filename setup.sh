@@ -7,6 +7,9 @@ USER=''
 GROUP=''
 PHP_P='7'
 PHP_S='4'
+APACHE_HTTP_PORT='81'
+APACHE_HTTPS_PORT='444'
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 echoY() {
     echo -e "\033[38;5;148m${1}\033[39m"
@@ -37,6 +40,64 @@ line_change(){
         sed -i "${LINENUM}d" ${2}
         sed -i "${LINENUM}i${3}" ${2}
     fi  
+}
+
+backup_old(){
+    if [ -f ${1} ] && [ ! -f ${1}_old ]; then
+       mv ${1} ${1}_old
+    fi
+}
+
+rm_old_pkg(){
+    silent systemctl stop ${1}
+    if [ ${OSNAME} = 'centos' ]; then     
+        silent yum remove ${1} -y 
+    else 
+        silent apt remove ${1} -y 
+    fi 
+    if [ "$(systemctl is-active ${1})" != 'active' ]; then 
+        echoG "[OK] remove ${1}"
+    else 
+        echoR "[Failed] remove ${1}"
+    fi             
+}
+
+checkweb(){
+    if [ ${1} = 'lsws' ] || [ ${1} = 'ols' ]; then
+        ps -ef | grep lshttpd | grep -v grep >/dev/null 2>&1
+    else
+        ps -ef | grep "${1}" | grep -v grep >/dev/null 2>&1
+    fi    
+    if [ ${?} = 0 ]; then 
+        echoG "${1} process is running!"
+        echoG 'Stop web service temporary'
+        if [ "${1}" = 'lsws' ]; then 
+           PROC_NAME='lshttpd'
+            silent ${LSDIR}/bin/lswsctrl stop
+            ps aux | grep '[w]swatch.sh' >/dev/null 2>&1
+            if [ ${?} = 0 ]; then
+                kill -9 $(ps aux | grep '[w]swatch.sh' | awk '{print $2}')
+            fi    
+        elif [ "${1}" = 'ols' ]; then 
+            PROC_NAME='lshttpd'
+            silent ${OLSDIR}/bin/lswsctrl stop  
+        elif [ "${1}" = 'httpd' ]; then
+            PROC_NAME='httpd'
+            silent systemctl stop ${PROC_NAME}
+        elif [ "${1}" = 'apache2' ]; then
+            PROC_NAME='apache2' 
+            silent systemctl stop ${PROC_NAME}
+        fi
+        sleep 5
+        if [ $(systemctl is-active ${PROC_NAME}) != 'active' ]; then 
+            echoG "[OK] Stop ${PROC_NAME} service"
+        else 
+            echoR "[Failed] Stop ${PROC_NAME} service"
+        fi 
+    else 
+        echoR '[ERROR] Failed to start the web server.'
+        ps -ef | grep ${PROC_NAME} | grep -v grep
+    fi 
 }
 
 check_os()
@@ -200,7 +261,6 @@ ubuntu_install_apache(){
     SERVERV=$(echo $(apache2 -v | grep version) | awk '{print substr ($3,8,9)}')
     checkweb ${APACHENAME}
     echoG "Version: apache ${SERVERV}"
-    echo "Version: apache ${SERVERV}" >>${SERVERACCESS} 
 }
 
 centos_install_apache(){
@@ -221,7 +281,6 @@ centos_install_apache(){
     SERVERV=$(echo $(httpd -v | grep version) | awk '{print substr ($3,8,9)}')
     checkweb ${APACHENAME}
     echoG "Version: apache ${SERVERV}"
-    echo "Version: apache ${SERVERV}" >> ${SERVERACCESS}
 }
 
 ubuntu_install_ols(){
@@ -233,7 +292,6 @@ ubuntu_install_ols(){
     echo "admin:${ENCRYPT_PASS}" > ${OLSDIR}/admin/conf/htpasswd
     SERVERV=$(cat ${OLSDIR}/VERSION)
     echoG "Version: openlitespeed ${SERVERV}"
-    echo "Version: openlitespeed ${SERVERV}" >> ${SERVERACCESS}     
     checkweb ols
 }
 
@@ -274,11 +332,11 @@ centos_reinstall(){
 
 ubuntu_install_php(){
     echoG 'Install PHP & Packages for LSWS'  
-    ubuntu_reinstall "lsphp${PHP_P}${PHP_S}"    
-    wget -qO - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash >/dev/null 2>&1
-    for PKG in '' -common -curl -json -modules-source -mysql -opcache -pspell -recode -sybase -tidy; do
-        /usr/bin/apt ${OPTIONAL} install -y lsphp${PHP_P}${PHP_S}${PKG} >/dev/null 2>&1
-    done
+    #ubuntu_reinstall "lsphp${PHP_P}${PHP_S}"    
+    #wget -qO - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash >/dev/null 2>&1
+    #for PKG in '' -common -curl -json -modules-source -mysql -opcache -pspell -recode -sybase -tidy; do
+    #    /usr/bin/apt ${OPTIONAL} install -y lsphp${PHP_P}${PHP_S}${PKG} >/dev/null 2>&1
+    #done
     echoG 'Install PHP & Packages for Apache'  
     ubuntu_reinstall "php${PHP_P}.${PHP_S}"
     for PKG in '' -bcmath -cli -common -curl -enchant -fpm -gd -gmp -json -mbstring -mysql -opcache \
@@ -331,14 +389,20 @@ ubuntu_setup_apache(){
     a2enmod ssl >/dev/null 2>&1
     a2enmod http2 >/dev/null 2>&1
     a2disconf other-vhosts-access-log >/dev/null 2>&1
-    cp ../../webservers/apache/conf/deflate.conf ${APADIR}/mods-available
-    cp ../../webservers/apache/conf/default-ssl.conf ${APADIR}/sites-available
+    cp webservers/apache/conf/deflate.conf ${APADIR}/mods-available
+    cp webservers/apache/conf/default-ssl.conf ${APADIR}/sites-available
     if [ ! -e ${APADIR}/sites-enabled/000-default-ssl.conf ]; then
         ln -s ${APADIR}/sites-available/default-ssl.conf ${APADIR}/sites-enabled/000-default-ssl.conf
     fi
     if [ ! -e ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf ]; then 
         ln -s ${APADIR}/conf-available/php${PHP_P}.${PHP_S}-fpm.conf ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf 
-    fi    
+    fi
+    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
+    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
+    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/ports.conf
+    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
+    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/ports.conf
+
     sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf                                                                           
 }
 
@@ -351,38 +415,38 @@ centos_setup_apache(){
     sed -i '/LoadModule mpm_event_module/s/^#//g' /etc/httpd/conf.modules.d/00-mpm.conf
     sed -i "s+SetHandler application/x-httpd-php+SetHandler proxy:unix:/var/run/php/php${PHP_P}.${PHP_S}-fpm.sock|fcgi://localhost+g" \
         /etc/httpd/conf.d/php.conf
-    cp ../../webservers/apache/conf/deflate.conf ${APADIR}/conf.d
-    cp ../../webservers/apache/conf/default-ssl.conf ${APADIR}/conf.d
+    cp webservers/apache/conf/deflate.conf ${APADIR}/conf.d
+    cp webservers/apache/conf/default-ssl.conf ${APADIR}/conf.d
     sed -i '/ErrorLog/s/^/#/g' /etc/httpd/conf.d/default-ssl.conf
+    sed -i "s/80/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf/httpd.conf
+    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf.d/default-ssl.conf
 }
 
 ubuntu_setup_ols(){
     echoG 'Setting OpenLiteSpeed Config'
     cd ${SCRIPTPATH}/
-    mkdir -p ${OLSDIR}/conf/vhosts/Wordpress
-    mkdir -p ${OLSDIR}/wordpress
     backup_old ${OLSDIR}/conf/httpd_config.conf
     backup_old ${OLSDIR}/Example/conf/vhconf.conf
     cp ./webservers/openlitespeed/conf/httpd_config.conf ${OLSDIR}/conf/
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
-    chown -R lsadm:lsadm ${OLSDIR}/conf/vhosts/Wordpress
+    sed -i "s/:80/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
-} 
+}
 
 centos_setup_ols(){
     echoG 'Setting OpenLiteSpeed Config'
     cd ${SCRIPTPATH}/
-    mkdir -p ${OLSDIR}/conf/vhosts/Wordpress
-    mkdir -p ${OLSDIR}/wordpress
     backup_old ${OLSDIR}/conf/httpd_config.conf
     backup_old ${OLSDIR}/Example/conf/vhconf.conf
     cp ./webservers/openlitespeed/conf/httpd_config.conf ${OLSDIR}/conf/
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
     sed -i "s/www-data/${USER}/g" ${OLSDIR}/conf/httpd_config.conf
     sed -i "s|/usr/local/lsws/lsphp${PHP_P}${PHP_S}/bin/lsphp|/usr/bin/lsphp|g" ${OLSDIR}/conf/httpd_config.conf
-    chown -R lsadm:lsadm ${OLSDIR}/conf/vhosts/Wordpress
+    sed -i "s/:80/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf    
     change_owner ${OLSDIR}/cachedata
-} 
+}
 
 prepare(){
     check_os

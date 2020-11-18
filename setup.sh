@@ -400,7 +400,7 @@ ubuntu_setup_apache(){
     sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
     sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
     sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/ports.conf
-    sed -i "s/443/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
+    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
     sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/ports.conf
     sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf
     systemctl restart apache2

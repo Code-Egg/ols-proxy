@@ -16,9 +16,9 @@ git clone https://github.com/Code-Egg/ols-proxy.git
 Update `backend-cnf` for backend server IP/Port if needed. If URL is not '127.0.0.1', then the setup script will treat the backend server as remote, and skip apache setup. 
 
 ```
-APACHE_HTTP_PORT='81'
-APACHE_HTTPS_PORT='444'
-APACHE_URL='127.0.0.1'
+BACKEND_HTTP_PORT='81'
+BACKEND_HTTPS_PORT='444'
+BACKEND_URL='127.0.0.1'
 ```
 
 Run the setup script

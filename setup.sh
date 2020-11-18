@@ -62,7 +62,7 @@ rm_old_pkg(){
 }
 
 check_remote(){
-    if [ "${APACHE_URL}" = '127.0.0.1' ]; then
+    if [ "${BACKEND_URL}" = '127.0.0.1' ]; then
         REMOTE='False'
     else 
         REMOTE='True'
@@ -418,11 +418,11 @@ ubuntu_setup_apache(){
         if [ ! -e ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf ]; then 
             ln -s ${APADIR}/conf-available/php${PHP_P}.${PHP_S}-fpm.conf ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf 
         fi
-        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
-        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
-        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/ports.conf
-        sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
-        sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/ports.conf
+        sed -i "s/80/${BACKEND_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
+        sed -i "s/80/${BACKEND_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
+        sed -i "s/80/${BACKEND_HTTP_PORT}/g" ${APADIR}/ports.conf
+        sed -i "s/443/${BACKEND_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
+        sed -i "s/443/${BACKEND_HTTPS_PORT}/g" ${APADIR}/ports.conf
         sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf
         systemctl restart apache2
     else    
@@ -443,8 +443,8 @@ centos_setup_apache(){
         cp webservers/apache/conf/deflate.conf ${APADIR}/conf.d
         cp webservers/apache/conf/default-ssl.conf ${APADIR}/conf.d
         sed -i '/ErrorLog/s/^/#/g' /etc/httpd/conf.d/default-ssl.conf
-        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/conf/httpd.conf
-        sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf.d/default-ssl.conf
+        sed -i "s/80/${BACKEND_HTTP_PORT}/g" ${APADIR}/conf/httpd.conf
+        sed -i "s/443/${BACKEND_HTTPS_PORT}/g" ${APADIR}/conf.d/default-ssl.conf
         systemctl restart httpd
     else    
         echoG 'Skip!'
@@ -458,9 +458,9 @@ ubuntu_setup_ols(){
     backup_old ${OLSDIR}/Example/conf/vhconf.conf
     cp ./webservers/openlitespeed/conf/httpd_config.conf ${OLSDIR}/conf/
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
-    sed -i "s/\:80/\:${APACHE_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/\:443/\:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/127.0.0.1/${APACHE_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/\:80/\:${BACKEND_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/\:443/\:${BACKEND_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/127.0.0.1/${BACKEND_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
     service lsws restart
 }
@@ -474,9 +474,9 @@ centos_setup_ols(){
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
     sed -i "s/www-data/${USER}/g" ${OLSDIR}/conf/httpd_config.conf
     sed -i "s|/usr/local/lsws/lsphp${PHP_P}${PHP_S}/bin/lsphp|/usr/bin/lsphp|g" ${OLSDIR}/conf/httpd_config.conf
-    sed -i "s/:80/:${APACHE_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/127.0.0.1/${APACHE_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/:80/:${BACKEND_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/:443/:${BACKEND_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/127.0.0.1/${BACKEND_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
     service lsws restart
 }
@@ -493,10 +493,12 @@ cleanup(){
 }
 
 testcase(){
-    curl -Iks --http1.1 http://${APACHE_URL}:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 https://${APACHE_URL}:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 http://${APACHE_URL}:${APACHE_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 https://${APACHE_URL}:${APACHE_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 http://${BACKEND_URL}:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 https://${BACKEND_URL}:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    if [ "${REMOTE}" = 'False' ]; then
+        curl -Iks --http1.1 http://${BACKEND_URL}:${BACKEND_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+        curl -Iks --http1.1 https://${BACKEND_URL}:${BACKEND_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+    fi     
 }
 
 main(){

@@ -332,11 +332,11 @@ centos_reinstall(){
 
 ubuntu_install_php(){
     echoG 'Install PHP & Packages for LSWS'  
-    #ubuntu_reinstall "lsphp${PHP_P}${PHP_S}"    
-    #wget -qO - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash >/dev/null 2>&1
-    #for PKG in '' -common -curl -json -modules-source -mysql -opcache -pspell -recode -sybase -tidy; do
-    #    /usr/bin/apt ${OPTIONAL} install -y lsphp${PHP_P}${PHP_S}${PKG} >/dev/null 2>&1
-    #done
+    ubuntu_reinstall "lsphp${PHP_P}${PHP_S}"    
+    wget -qO - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash >/dev/null 2>&1
+    for PKG in '' -common -curl -json -modules-source -mysql -opcache -pspell -recode -sybase -tidy; do
+        /usr/bin/apt ${OPTIONAL} install -y lsphp${PHP_P}${PHP_S}${PKG} >/dev/null 2>&1
+    done
     echoG 'Install PHP & Packages for Apache'  
     ubuntu_reinstall "php${PHP_P}.${PHP_S}"
     for PKG in '' -bcmath -cli -common -curl -enchant -fpm -gd -gmp -json -mbstring -mysql -opcache \
@@ -400,10 +400,10 @@ ubuntu_setup_apache(){
     sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
     sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
     sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/ports.conf
-    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
+    sed -i "s/443/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
     sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/ports.conf
-
-    sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf                                                                           
+    sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf
+    systemctl restart apache2
 }
 
 centos_setup_apache(){
@@ -418,8 +418,9 @@ centos_setup_apache(){
     cp webservers/apache/conf/deflate.conf ${APADIR}/conf.d
     cp webservers/apache/conf/default-ssl.conf ${APADIR}/conf.d
     sed -i '/ErrorLog/s/^/#/g' /etc/httpd/conf.d/default-ssl.conf
-    sed -i "s/80/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf/httpd.conf
+    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/conf/httpd.conf
     sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf.d/default-ssl.conf
+    systemctl restart httpd
 }
 
 ubuntu_setup_ols(){
@@ -429,9 +430,10 @@ ubuntu_setup_ols(){
     backup_old ${OLSDIR}/Example/conf/vhconf.conf
     cp ./webservers/openlitespeed/conf/httpd_config.conf ${OLSDIR}/conf/
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
-    sed -i "s/:80/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/\:80/\:${APACHE_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/\:443/\:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
+    service lsws restart
 }
 
 centos_setup_ols(){
@@ -443,15 +445,27 @@ centos_setup_ols(){
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
     sed -i "s/www-data/${USER}/g" ${OLSDIR}/conf/httpd_config.conf
     sed -i "s|/usr/local/lsws/lsphp${PHP_P}${PHP_S}/bin/lsphp|/usr/bin/lsphp|g" ${OLSDIR}/conf/httpd_config.conf
-    sed -i "s/:80/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/:80/:${APACHE_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf    
     change_owner ${OLSDIR}/cachedata
+    service lsws restart
 }
 
 prepare(){
     check_os
     path_update
     gen_selfsigned_cert
+}
+
+cleanup(){
+    rm -f /tmp/lshttpd/.rtreport
+}
+
+testcase(){
+    curl -Iks --http1.1 http://127.0.0.1:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 https://127.0.0.1:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 http://127.0.0.1:${APACHE_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 https://127.0.0.1:${APACHE_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
 }
 
 main(){
@@ -471,5 +485,7 @@ main(){
         ubuntu_setup_apache
         ubuntu_setup_ols
     fi
+    cleanup
+    testcase
 }
 main

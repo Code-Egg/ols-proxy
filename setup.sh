@@ -7,8 +7,7 @@ USER=''
 GROUP=''
 PHP_P='7'
 PHP_S='4'
-APACHE_HTTP_PORT='81'
-APACHE_HTTPS_PORT='444'
+REMOTE='False' #'True'
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 echoY() {
@@ -60,6 +59,15 @@ rm_old_pkg(){
     else 
         echoR "[Failed] remove ${1}"
     fi             
+}
+
+check_remote(){
+    if [ "${APACHE_URL}" = '127.0.0.1' ]; then
+        REMOTE='False'
+    else 
+        REMOTE='True'
+        echoG 'Detect remote server, will skip Apache setup!'
+    fi
 }
 
 checkweb(){
@@ -247,40 +255,48 @@ centos_pkg_basic(){
 
 ubuntu_install_apache(){
     echoG 'Install Apache Web Server'
-    if [ -e /usr/sbin/${APACHENAME} ]; then 
-        echoY "Remove existing ${APACHENAME}" 
-        rm_old_pkg ${APACHENAME}  
-    fi    
-    yes "" | add-apt-repository ppa:ondrej/apache2 >/dev/null 2>&1
-    if [ "$(grep -iR apache2 ${REPOPATH}/)" = '' ]; then 
-        echoR '[Failed] to add APACHE2 repository'
-    fi     
-    silent apt-get update
-    apt install ${APACHENAME} -y >/dev/null 2>&1
-    systemctl start ${APACHENAME} >/dev/null 2>&1
-    SERVERV=$(echo $(apache2 -v | grep version) | awk '{print substr ($3,8,9)}')
-    checkweb ${APACHENAME}
-    echoG "Version: apache ${SERVERV}"
+    if [ "${REMOTE}" = 'False' ]; then
+        if [ -e /usr/sbin/${APACHENAME} ]; then 
+            echoY "Remove existing ${APACHENAME}" 
+            rm_old_pkg ${APACHENAME}  
+        fi    
+        yes "" | add-apt-repository ppa:ondrej/apache2 >/dev/null 2>&1
+        if [ "$(grep -iR apache2 ${REPOPATH}/)" = '' ]; then 
+            echoR '[Failed] to add APACHE2 repository'
+        fi     
+        silent apt-get update
+        apt install ${APACHENAME} -y >/dev/null 2>&1
+        systemctl start ${APACHENAME} >/dev/null 2>&1
+        SERVERV=$(echo $(apache2 -v | grep version) | awk '{print substr ($3,8,9)}')
+        checkweb ${APACHENAME}
+        echoG "Version: apache ${SERVERV}"
+    else    
+        echoG 'Skip!'
+    fi
 }
 
 centos_install_apache(){
     echoG 'Install Apache Web Server'
-    if [ -e /usr/sbin/${APACHENAME} ]; then 
-        echoY "Remove existing ${APACHENAME}" 
-        rm_old_pkg ${APACHENAME}
-        silent yum remove httpd* -y
-        KILL_PROCESS ${APACHENAME}  
+    if [ "${REMOTE}" = 'False' ]; then
+        if [ -e /usr/sbin/${APACHENAME} ]; then 
+            echoY "Remove existing ${APACHENAME}" 
+            rm_old_pkg ${APACHENAME}
+            silent yum remove httpd* -y
+            KILL_PROCESS ${APACHENAME}  
+        fi    
+        cd ${REPOPATH}
+        if [ "${OSNAMEVER}" != "CENTOS8" ] ; then
+            wget https://repo.codeit.guru/codeit.el`rpm -q --qf "%{VERSION}" $(rpm -q --whatprovides redhat-release)`.repo >/dev/null 2>&1 
+        fi    
+        silent yum install ${APACHENAME} mod_ssl -y
+        sleep 1
+        silent systemctl start ${APACHENAME}
+        SERVERV=$(echo $(httpd -v | grep version) | awk '{print substr ($3,8,9)}')
+        checkweb ${APACHENAME}
+        echoG "Version: apache ${SERVERV}"
+    else    
+        echoG 'Skip!'
     fi    
-    cd ${REPOPATH}
-    if [ "${OSNAMEVER}" != "CENTOS8" ] ; then
-        wget https://repo.codeit.guru/codeit.el`rpm -q --qf "%{VERSION}" $(rpm -q --whatprovides redhat-release)`.repo >/dev/null 2>&1 
-    fi    
-    silent yum install ${APACHENAME} mod_ssl -y
-    sleep 1
-    silent systemctl start ${APACHENAME}
-    SERVERV=$(echo $(httpd -v | grep version) | awk '{print substr ($3,8,9)}')
-    checkweb ${APACHENAME}
-    echoG "Version: apache ${SERVERV}"
 }
 
 ubuntu_install_ols(){
@@ -337,20 +353,24 @@ ubuntu_install_php(){
     for PKG in '' -common -curl -json -modules-source -mysql -opcache -pspell -recode -sybase -tidy; do
         /usr/bin/apt ${OPTIONAL} install -y lsphp${PHP_P}${PHP_S}${PKG} >/dev/null 2>&1
     done
-    echoG 'Install PHP & Packages for Apache'  
-    ubuntu_reinstall "php${PHP_P}.${PHP_S}"
-    for PKG in '' -bcmath -cli -common -curl -enchant -fpm -gd -gmp -json -mbstring -mysql -opcache \
-        -pspell -readline -recode -soap -tidy -xml -xmlrpc -zip; do 
-        /usr/bin/apt ${OPTIONAL} install -y php${PHP_P}.${PHP_S}${PKG} >/dev/null 2>&1
-    done
-    sed -i -e 's/extension=pdo_dblib.so/;extension=pdo_dblib.so/' \
-        /usr/local/lsws/lsphp${PHP_P}${PHP_S}/etc/php/${PHP_P}.${PHP_S}/mods-available/pdo_dblib.ini
-    sed -i -e 's/extension=shmop.so/;extension=shmop.so/' /etc/php/${PHP_P}.${PHP_S}/fpm/conf.d/20-shmop.ini
-    if [ ${OSNAMEVER} != 'UBUNTU20' ]; then
-        sed -i -e 's/extension=wddx.so/;extension=wddx.so/' /etc/php/${PHP_P}.${PHP_S}/fpm/conf.d/20-wddx.ini
-    fi    
-    NEWKEY='listen.backlog = 4096'
-    line_change 'listen.backlog' ${FPMCONF} "${NEWKEY}"
+    echoG 'Install PHP & Packages for Apache'
+    if [ "${REMOTE}" = 'False' ]; then
+        ubuntu_reinstall "php${PHP_P}.${PHP_S}"
+        for PKG in '' -bcmath -cli -common -curl -enchant -fpm -gd -gmp -json -mbstring -mysql -opcache \
+            -pspell -readline -recode -soap -tidy -xml -xmlrpc -zip; do 
+            /usr/bin/apt ${OPTIONAL} install -y php${PHP_P}.${PHP_S}${PKG} >/dev/null 2>&1
+        done
+        sed -i -e 's/extension=pdo_dblib.so/;extension=pdo_dblib.so/' \
+            /usr/local/lsws/lsphp${PHP_P}${PHP_S}/etc/php/${PHP_P}.${PHP_S}/mods-available/pdo_dblib.ini
+        sed -i -e 's/extension=shmop.so/;extension=shmop.so/' /etc/php/${PHP_P}.${PHP_S}/fpm/conf.d/20-shmop.ini
+        if [ ${OSNAMEVER} != 'UBUNTU20' ]; then
+            sed -i -e 's/extension=wddx.so/;extension=wddx.so/' /etc/php/${PHP_P}.${PHP_S}/fpm/conf.d/20-wddx.ini
+        fi    
+        NEWKEY='listen.backlog = 4096'
+        line_change 'listen.backlog' ${FPMCONF} "${NEWKEY}"
+    else    
+        echoG 'Skip!'
+    fi        
 }
 
 centos_install_php(){
@@ -382,45 +402,53 @@ centos_install_php(){
 
 ubuntu_setup_apache(){
     echoG 'Setting Apache Config'
-    cd ${SCRIPTPATH}/
-    a2enmod proxy_fcgi >/dev/null 2>&1
-    a2enconf php${PHP_P}.${PHP_S}-fpm >/dev/null 2>&1
-    a2enmod mpm_event >/dev/null 2>&1
-    a2enmod ssl >/dev/null 2>&1
-    a2enmod http2 >/dev/null 2>&1
-    a2disconf other-vhosts-access-log >/dev/null 2>&1
-    cp webservers/apache/conf/deflate.conf ${APADIR}/mods-available
-    cp webservers/apache/conf/default-ssl.conf ${APADIR}/sites-available
-    if [ ! -e ${APADIR}/sites-enabled/000-default-ssl.conf ]; then
-        ln -s ${APADIR}/sites-available/default-ssl.conf ${APADIR}/sites-enabled/000-default-ssl.conf
-    fi
-    if [ ! -e ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf ]; then 
-        ln -s ${APADIR}/conf-available/php${PHP_P}.${PHP_S}-fpm.conf ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf 
-    fi
-    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
-    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
-    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/ports.conf
-    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
-    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/ports.conf
-    sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf
-    systemctl restart apache2
+    if [ "${REMOTE}" = 'False' ]; then
+        cd ${SCRIPTPATH}/
+        a2enmod proxy_fcgi >/dev/null 2>&1
+        a2enconf php${PHP_P}.${PHP_S}-fpm >/dev/null 2>&1
+        a2enmod mpm_event >/dev/null 2>&1
+        a2enmod ssl >/dev/null 2>&1
+        a2enmod http2 >/dev/null 2>&1
+        a2disconf other-vhosts-access-log >/dev/null 2>&1
+        cp webservers/apache/conf/deflate.conf ${APADIR}/mods-available
+        cp webservers/apache/conf/default-ssl.conf ${APADIR}/sites-available
+        if [ ! -e ${APADIR}/sites-enabled/000-default-ssl.conf ]; then
+            ln -s ${APADIR}/sites-available/default-ssl.conf ${APADIR}/sites-enabled/000-default-ssl.conf
+        fi
+        if [ ! -e ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf ]; then 
+            ln -s ${APADIR}/conf-available/php${PHP_P}.${PHP_S}-fpm.conf ${APADIR}/conf-enabled/php${PHP_P}.${PHP_S}-fpm.conf 
+        fi
+        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-available/000-default.conf
+        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/sites-enabled/000-default.conf
+        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/ports.conf
+        sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/sites-available/default-ssl.conf
+        sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/ports.conf
+        sed -i '/ CustomLog/s/^/#/' ${APADIR}/sites-enabled/000-default.conf
+        systemctl restart apache2
+    else    
+        echoG 'Skip!'
+    fi 
 }
 
 centos_setup_apache(){
     echoG 'Setting Apache Config'
-    cd ${SCRIPTPATH}/
-    echo "Protocols h2 http/1.1" >> /etc/httpd/conf/httpd.conf
-    sed -i '/logs\/access_log" common/s/^/#/' /etc/httpd/conf/httpd.conf
-    sed -i '/LoadModule mpm_prefork_module/s/^/#/g' /etc/httpd/conf.modules.d/00-mpm.conf
-    sed -i '/LoadModule mpm_event_module/s/^#//g' /etc/httpd/conf.modules.d/00-mpm.conf
-    sed -i "s+SetHandler application/x-httpd-php+SetHandler proxy:unix:/var/run/php/php${PHP_P}.${PHP_S}-fpm.sock|fcgi://localhost+g" \
-        /etc/httpd/conf.d/php.conf
-    cp webservers/apache/conf/deflate.conf ${APADIR}/conf.d
-    cp webservers/apache/conf/default-ssl.conf ${APADIR}/conf.d
-    sed -i '/ErrorLog/s/^/#/g' /etc/httpd/conf.d/default-ssl.conf
-    sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/conf/httpd.conf
-    sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf.d/default-ssl.conf
-    systemctl restart httpd
+    if [ "${REMOTE}" = 'False' ]; then
+        cd ${SCRIPTPATH}/
+        echo "Protocols h2 http/1.1" >> /etc/httpd/conf/httpd.conf
+        sed -i '/logs\/access_log" common/s/^/#/' /etc/httpd/conf/httpd.conf
+        sed -i '/LoadModule mpm_prefork_module/s/^/#/g' /etc/httpd/conf.modules.d/00-mpm.conf
+        sed -i '/LoadModule mpm_event_module/s/^#//g' /etc/httpd/conf.modules.d/00-mpm.conf
+        sed -i "s+SetHandler application/x-httpd-php+SetHandler proxy:unix:/var/run/php/php${PHP_P}.${PHP_S}-fpm.sock|fcgi://localhost+g" \
+            /etc/httpd/conf.d/php.conf
+        cp webservers/apache/conf/deflate.conf ${APADIR}/conf.d
+        cp webservers/apache/conf/default-ssl.conf ${APADIR}/conf.d
+        sed -i '/ErrorLog/s/^/#/g' /etc/httpd/conf.d/default-ssl.conf
+        sed -i "s/80/${APACHE_HTTP_PORT}/g" ${APADIR}/conf/httpd.conf
+        sed -i "s/443/${APACHE_HTTPS_PORT}/g" ${APADIR}/conf.d/default-ssl.conf
+        systemctl restart httpd
+    else    
+        echoG 'Skip!'
+    fi 
 }
 
 ubuntu_setup_ols(){
@@ -432,6 +460,7 @@ ubuntu_setup_ols(){
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
     sed -i "s/\:80/\:${APACHE_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     sed -i "s/\:443/\:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/127.0.0.1/${APACHE_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
     service lsws restart
 }
@@ -446,7 +475,8 @@ centos_setup_ols(){
     sed -i "s/www-data/${USER}/g" ${OLSDIR}/conf/httpd_config.conf
     sed -i "s|/usr/local/lsws/lsphp${PHP_P}${PHP_S}/bin/lsphp|/usr/bin/lsphp|g" ${OLSDIR}/conf/httpd_config.conf
     sed -i "s/:80/:${APACHE_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf    
+    sed -i "s/:443/:${APACHE_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/127.0.0.1/${APACHE_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
     service lsws restart
 }
@@ -454,6 +484,7 @@ centos_setup_ols(){
 prepare(){
     check_os
     path_update
+    check_remote
     gen_selfsigned_cert
 }
 
@@ -462,10 +493,10 @@ cleanup(){
 }
 
 testcase(){
-    curl -Iks --http1.1 http://127.0.0.1:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 https://127.0.0.1:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 http://127.0.0.1:${APACHE_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 https://127.0.0.1:${APACHE_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 http://${APACHE_URL}:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 https://${APACHE_URL}:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 http://${APACHE_URL}:${APACHE_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 https://${APACHE_URL}:${APACHE_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
 }
 
 main(){
@@ -488,4 +519,5 @@ main(){
     cleanup
     testcase
 }
-main
+
+source backend-cnf && main

@@ -13,17 +13,18 @@ Clone the repository
 git clone https://github.com/Code-Egg/ols-proxy.git
 ```
 
-Update `backend-cnf` for backend server IP/Port if needed. If URL is not '127.0.0.1', then the setup script will treat the backend server as remote, and skip apache setup. 
+Update `/ols-proxy/backend-cnf` for backend server IP/Port if needed. If URL is not '127.0.0.1', then the setup script will treat the backend server as remote, and skip apache setup. 
 
 ```
 BACKEND_HTTP_PORT='81'
 BACKEND_HTTPS_PORT='444'
-BACKEND_URL='127.0.0.1'
+BACKEND_IP='127.0.0.1'
+BACKEND_DOMAIN='www.example.com'
 ```
 
 Run the setup script
 ```
-cd ols-proxy; bash setup.sh
+bash /ols-proxy/setup.sh
 ```
 
 ## Optional Settings

@@ -41,6 +41,11 @@ line_change(){
     fi  
 }
 
+gen_folder(){
+    mkdir -p /var/www/html
+    change_owner '/var/www/html'
+}
+
 backup_old(){
     if [ -f ${1} ] && [ ! -f ${1}_old ]; then
        mv ${1} ${1}_old
@@ -62,7 +67,7 @@ rm_old_pkg(){
 }
 
 check_remote(){
-    if [ "${BACKEND_URL}" = '127.0.0.1' ]; then
+    if [ "${BACKEND_IP}" = '127.0.0.1' ]; then
         REMOTE='False'
     else 
         REMOTE='True'
@@ -460,8 +465,10 @@ ubuntu_setup_ols(){
     cp ./webservers/openlitespeed/conf/vhconf.conf ${OLSDIR}/conf/vhosts/Example/
     sed -i "s/\:80/\:${BACKEND_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     sed -i "s/\:443/\:${BACKEND_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/127.0.0.1/${BACKEND_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/127.0.0.1/${BACKEND_IP}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/www.example.com/${BACKEND_DOMAIN}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
+    rm -f /tmp/lshttpd/.rtreport
     service lsws restart
 }
 
@@ -476,8 +483,10 @@ centos_setup_ols(){
     sed -i "s|/usr/local/lsws/lsphp${PHP_P}${PHP_S}/bin/lsphp|/usr/bin/lsphp|g" ${OLSDIR}/conf/httpd_config.conf
     sed -i "s/:80/:${BACKEND_HTTP_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     sed -i "s/:443/:${BACKEND_HTTPS_PORT}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
-    sed -i "s/127.0.0.1/${BACKEND_URL}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/127.0.0.1/${BACKEND_IP}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
+    sed -i "s/www.example.com/${BACKEND_DOMAIN}/g" ${OLSDIR}/conf/vhosts/Example/vhconf.conf
     change_owner ${OLSDIR}/cachedata
+    rm -f /tmp/lshttpd/.rtreport
     service lsws restart
 }
 
@@ -485,19 +494,16 @@ prepare(){
     check_os
     path_update
     check_remote
+    gen_folder
     gen_selfsigned_cert
 }
 
-cleanup(){
-    rm -f /tmp/lshttpd/.rtreport
-}
-
 testcase(){
-    curl -Iks --http1.1 http://${BACKEND_URL}:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
-    curl -Iks --http1.1 https://${BACKEND_URL}:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 http://${BACKEND_IP}:80/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
+    curl -Iks --http1.1 https://${BACKEND_IP}:443/ | grep -i LiteSpeed && echoG 'Good' || echoR 'Please check'
     if [ "${REMOTE}" = 'False' ]; then
-        curl -Iks --http1.1 http://${BACKEND_URL}:${BACKEND_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
-        curl -Iks --http1.1 https://${BACKEND_URL}:${BACKEND_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+        curl -Iks --http1.1 http://${BACKEND_IP}:${BACKEND_HTTP_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
+        curl -Iks --http1.1 https://${BACKEND_IP}:${BACKEND_HTTPS_PORT}/ | grep -i Apache && echoG 'Good' || echoR 'Please check'
     fi     
 }
 
@@ -518,7 +524,6 @@ main(){
         ubuntu_setup_apache
         ubuntu_setup_ols
     fi
-    cleanup
     testcase
 }
 

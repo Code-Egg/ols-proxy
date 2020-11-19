@@ -24,7 +24,7 @@ BACKEND_DOMAIN='www.example.com'
 
 Run the setup script
 ```
-bash /ols-proxy/setup.sh
+cd ols-proxy; bash setup.sh
 ```
 
 ## Optional Settings

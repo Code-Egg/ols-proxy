@@ -147,7 +147,7 @@ check_os()
         fi
     elif [ -f /etc/debian_version ] ; then
         OSNAME=debian
-        wget -O - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash
+        wget -qO - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash >/dev/null 2>&1
         DEBIAN_V=$(awk -F '.' '{print $1}' /etc/debian_version)
         if [ ${DEBIAN_V} = 7 ] ; then
             OSNAMEVER=DEBIAN7

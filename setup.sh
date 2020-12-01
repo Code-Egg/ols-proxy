@@ -260,47 +260,47 @@ centos_pkg_basic(){
 
 ubuntu_install_apache(){
     echoG 'Install Apache Web Server'
+    if [ -e /usr/sbin/${APACHENAME} ]; then 
+        echoY "Remove existing ${APACHENAME}" 
+        rm_old_pkg ${APACHENAME}  
+    fi    
+    yes "" | add-apt-repository ppa:ondrej/apache2 >/dev/null 2>&1
+    if [ "$(grep -iR apache2 ${REPOPATH}/)" = '' ]; then 
+        echoR '[Failed] to add APACHE2 repository'
+    fi     
+    silent apt-get update
+    apt install ${APACHENAME} -y >/dev/null 2>&1
     if [ "${REMOTE}" = 'False' ]; then
-        if [ -e /usr/sbin/${APACHENAME} ]; then 
-            echoY "Remove existing ${APACHENAME}" 
-            rm_old_pkg ${APACHENAME}  
-        fi    
-        yes "" | add-apt-repository ppa:ondrej/apache2 >/dev/null 2>&1
-        if [ "$(grep -iR apache2 ${REPOPATH}/)" = '' ]; then 
-            echoR '[Failed] to add APACHE2 repository'
-        fi     
-        silent apt-get update
-        apt install ${APACHENAME} -y >/dev/null 2>&1
         systemctl start ${APACHENAME} >/dev/null 2>&1
         SERVERV=$(echo $(apache2 -v | grep version) | awk '{print substr ($3,8,9)}')
         checkweb ${APACHENAME}
         echoG "Version: apache ${SERVERV}"
     else    
-        echoG 'Skip!'
+        echoG 'Skip apache service start!'
     fi
 }
 
 centos_install_apache(){
     echoG 'Install Apache Web Server'
+    if [ -e /usr/sbin/${APACHENAME} ]; then 
+        echoY "Remove existing ${APACHENAME}" 
+        rm_old_pkg ${APACHENAME}
+        silent yum remove httpd* -y
+        KILL_PROCESS ${APACHENAME}  
+    fi    
+    cd ${REPOPATH}
+    if [ "${OSNAMEVER}" != "CENTOS8" ] ; then
+        wget https://repo.codeit.guru/codeit.el`rpm -q --qf "%{VERSION}" $(rpm -q --whatprovides redhat-release)`.repo >/dev/null 2>&1 
+    fi
+    silent yum install ${APACHENAME} mod_ssl -y
+    sleep 1
     if [ "${REMOTE}" = 'False' ]; then
-        if [ -e /usr/sbin/${APACHENAME} ]; then 
-            echoY "Remove existing ${APACHENAME}" 
-            rm_old_pkg ${APACHENAME}
-            silent yum remove httpd* -y
-            KILL_PROCESS ${APACHENAME}  
-        fi    
-        cd ${REPOPATH}
-        if [ "${OSNAMEVER}" != "CENTOS8" ] ; then
-            wget https://repo.codeit.guru/codeit.el`rpm -q --qf "%{VERSION}" $(rpm -q --whatprovides redhat-release)`.repo >/dev/null 2>&1 
-        fi    
-        silent yum install ${APACHENAME} mod_ssl -y
-        sleep 1
         silent systemctl start ${APACHENAME}
         SERVERV=$(echo $(httpd -v | grep version) | awk '{print substr ($3,8,9)}')
         checkweb ${APACHENAME}
         echoG "Version: apache ${SERVERV}"
     else    
-        echoG 'Skip!'
+        echoG 'Skip apache service start!'
     fi    
 }
 

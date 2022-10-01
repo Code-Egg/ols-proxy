@@ -128,11 +128,7 @@ check_os()
         OSNAME=ubuntu
         wget -qO - http://rpms.litespeedtech.com/debian/enable_lst_debain_repo.sh | bash >/dev/null 2>&1
         UBUNTU_V=$(grep 'DISTRIB_RELEASE' /etc/lsb-release | awk -F '=' '{print substr($2,1,2)}')
-        if [ ${UBUNTU_V} = 14 ] ; then
-            OSNAMEVER=UBUNTU14
-            OSVER=trusty
-            MARIADBCPUARCH="arch=amd64,i386,ppc64el"
-        elif [ ${UBUNTU_V} = 16 ] ; then
+        if [ ${UBUNTU_V} = 16 ] ; then
             OSNAMEVER=UBUNTU16
             OSVER=xenial
             MARIADBCPUARCH="arch=amd64,i386,ppc64el"
@@ -174,7 +170,7 @@ check_os()
         fi
     fi
     if [ "${OSNAMEVER}" = "" ] ; then
-        echoR "Sorry, currently script only supports Centos(7-8), Debian(7-11) and Ubuntu(14,16,18,20,22)."
+        echoR "Sorry, currently script only supports Centos(7-8), Debian(7-11) and Ubuntu(16,18,20,22)."
         exit 1
     else
         if [ "${OSNAME}" = "centos" ] ; then
@@ -328,8 +324,8 @@ centos_install_ols(){
     centos_reinstall 'openlitespeed'
     if [ ${OSVER} = 8 ]; then
         silent rpm -Uvh http://rpms.litespeedtech.com/centos/litespeed-repo-1.1-1.el8.noarch.rpm
-    else
-        silent rpm -Uvh http://rpms.litespeedtech.com/centos/litespeed-repo-1.1-1.el7.noarch.rpm
+    elif [ ${OSVER} = 7 ]; then
+        silent rpm -Uvh http://rpms.litespeedtech.com/centos/litespeed-repo-1.1-1.el8.noarch.rpm
     fi    
     silent /usr/bin/yum ${OPTIONAL} openlitespeed -y
     ENCRYPT_PASS=$(${OLSDIR}/admin/fcgi-bin/admin_php* -q ${OLSDIR}/admin/misc/htpasswd.php ${ADMIN_PASS})

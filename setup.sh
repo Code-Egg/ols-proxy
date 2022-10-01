@@ -5,8 +5,8 @@ OLSDIR='/usr/local/lsws'
 CERTDIR='/etc/ssl'
 USER=''
 GROUP=''
-PHP_P='7'
-PHP_S='4'
+PHP_P='8'
+PHP_S='1'
 REMOTE='False' #'True'
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
@@ -142,8 +142,12 @@ check_os()
             MARIADBCPUARCH="arch=amd64"
         elif [ ${UBUNTU_V} = 20 ] ; then
             OSNAMEVER=UBUNTU20
-            OSVER=bionic
+            OSVER=focal
             MARIADBCPUARCH="arch=amd64"            
+        elif [ ${UBUNTU_V} = 22 ] ; then
+            OSNAMEVER=UBUNTU22
+            OSVER=jammy
+            MARIADBCPUARCH="arch=amd64"                    
         fi
     elif [ -f /etc/debian_version ] ; then
         OSNAME=debian
@@ -164,10 +168,13 @@ check_os()
         elif [ ${DEBIAN_V} = 10 ] ; then
             OSNAMEVER=DEBIAN10
             OSVER=buster
+        elif [ ${DEBIAN_V} = 11 ] ; then
+            OSNAMEVER=DEBIAN11
+            OSVER=bullseye            
         fi
     fi
     if [ "${OSNAMEVER}" = "" ] ; then
-        echoR "Sorry, currently script only supports Centos(7-8), Debian(7-10) and Ubuntu(14,16,18,20)."
+        echoR "Sorry, currently script only supports Centos(7-8), Debian(7-11) and Ubuntu(14,16,18,20,22)."
         exit 1
     else
         if [ "${OSNAME}" = "centos" ] ; then

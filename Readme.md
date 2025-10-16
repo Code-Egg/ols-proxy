@@ -1,4 +1,4 @@
-### OpenLiteSpeed as a Reverse Proxy
+### OpenLiteSpeed as a Reverse Proxy 
 Environment
 ```
 Port 80  >>> OpenLiteSpeed proxy >>> port 81  Apache
@@ -28,7 +28,7 @@ cd ols-proxy; bash setup.sh
 ```
 
 ## Optional Settings
-Make sure your OpenLiteSpeed version start from v1.7.6+
+Make sure your OpenLiteSpeed version start from v1.7.18+
 
 Enable OWASP ModSecurity rule set on OLS
 ```
@@ -37,4 +37,4 @@ bash owaspctl.sh --enable
 Disable OWASP ModSecurity rule set on OLS
 ```
 bash owaspctl.sh --disable
-```
+``` 

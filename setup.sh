@@ -1,15 +1,13 @@
 #!/bin/bash
-
 APADIR='/etc/apache2'
 OLSDIR='/usr/local/lsws'
 CERTDIR='/etc/ssl'
 USER=''
 GROUP=''
 PHP_P='8'
-PHP_S='1'
+PHP_S='4'
 REMOTE='False' #'True'
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
 echoY() {
     echo -e "\033[38;5;148m${1}\033[39m"
 }
@@ -20,7 +18,6 @@ echoR()
 {
     echo -e "\033[38;5;203m${1}\033[39m"
 }
-
 change_owner(){
     chown -R ${USER}:${GROUP} ${1}
 }
